@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: filevskiy_bot
+    command: python bot.py
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - filevskiy_network
+
+  scheduler:
+    build: .
+    container_name: filevskiy_scheduler
+    command: python scheduler_runner.py
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - filevskiy_network
+    depends_on:
+      - bot
+
+networks:
+  filevskiy_network:
+    driver: bridge
+
