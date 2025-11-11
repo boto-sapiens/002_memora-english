@@ -20,10 +20,8 @@ class GroupStatsService:
             
             # Calculate statistics for this user
             total_cards = len(cards)
-            learned_cards = sum(1 for c in cards if c.status == 'review')
-            due_cards = sum(1 for c in cards 
-                           if c.status == 'review' 
-                           and datetime.fromisoformat(c.next_review_time) <= now)
+            learned_cards = sum(1 for c in cards if c.status == 'learned')
+            pending_cards = sum(1 for c in cards if c.status == 'pending')
             
             # Display name (username or first name)
             display_name = f"@{user.username}" if user.username else f"User_{user.telegram_id}"
@@ -32,7 +30,7 @@ class GroupStatsService:
                 'display_name': display_name,
                 'learned': learned_cards,
                 'total': total_cards,
-                'due': due_cards,
+                'due': pending_cards,
                 'streak': user.current_streak,
                 'total_reviews': user.total_reviews,
             })

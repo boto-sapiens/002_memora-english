@@ -44,54 +44,32 @@ async def cmd_start(message: Message):
         else:
             await message.answer("❌ Ошибка инициализации. Попробуйте еще раз.")
     else:
-        # Existing user
-        if not user.learning_phase_completed:
-            # Continue learning phase
-            card = await session_manager.get_next_card(telegram_id)
-            session_state = await session_manager.get_session_state(telegram_id)
+        # Existing user - reset session and show next card
+        await session_manager.reset_session(telegram_id)
+        
+        card = await session_manager.get_next_card(telegram_id)
+        session_state = await session_manager.get_session_state(telegram_id)
+        
+        if card and session_state:
+            # Initialize session index
+            user = await storage.get_user(telegram_id)
+            if user:
+                user.current_session_index = 0
+                await storage.save_user(user)
             
-            if card and session_state:
-                # Send message for existing user
-                russian_text = card.text_ru if card.text_ru else card.text
-                progress_text = f"📊 Прогресс: {session_state.current_index + 1}/{session_state.total_in_session}"
-                text = f"{progress_text}\n\n🇷🇺 <i>{russian_text}</i>"
-                
-                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="👁 Показать ответ", callback_data=f"show_answer:{card.card_id}")]
-                ])
-                
-                await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
-            else:
-                await message.answer("✅ Обучение завершено! Теперь карточки будут показываться по расписанию.")
+            # Send card
+            russian_text = card.text_ru if card.text_ru else card.text
+            progress_text = f"📊 Прогресс: {session_state.current_index + 1}/{session_state.total_in_session}"
+            text = f"{progress_text}\n\n🇷🇺 <i>{russian_text}</i>"
+            
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👁 Показать ответ", callback_data=f"show_answer:{card.card_id}")]
+            ])
+            
+            await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
         else:
-            # Start review phase
-            # Сбросить старую сессию
-            await session_manager.reset_session(telegram_id)
-            
-            card = await session_manager.get_next_card(telegram_id)
-            session_state = await session_manager.get_session_state(telegram_id)
-            
-            if card and session_state:
-                # Инициализировать новую сессию review
-                user = await storage.get_user(telegram_id)
-                if user:
-                    user.current_session_index = 0
-                    await storage.save_user(user)
-                
-                # Send message for review
-                russian_text = card.text_ru if card.text_ru else card.text
-                progress_text = f"📊 Прогресс: {session_state.current_index + 1}/{session_state.total_in_session}"
-                text = f"{progress_text}\n\n🇷🇺 <i>{russian_text}</i>"
-                
-                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="👁 Показать ответ", callback_data=f"show_answer:{card.card_id}")]
-                ])
-                
-                await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
-            else:
-                await message.answer("✅ Нет карточек для повторения!")
+            await message.answer("✅ Нет карточек для повторения! Все фразы изучены.")
 
 
 @router.callback_query(F.data.startswith("show_answer:"))

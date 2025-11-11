@@ -40,10 +40,12 @@ class UserCard:
     card_id: int
     text: str
     interval_index: int
-    next_review_time: str
-    status: str  # 'learning' or 'review'
+    next_review_time: Optional[str]
+    status: str  # "new" | "learning" | "pending" | "learned"
     created_at: str
     last_reviewed: Optional[str] = None
+    last_response_type: Optional[str] = None  # "forgot" | "uncertain" | "knew"
+    deadline_time: Optional[str] = None  # Deadline for pending cards (when they expire)
     text_ru: Optional[str] = None
     text_en: Optional[str] = None
     transcription: Optional[str] = None

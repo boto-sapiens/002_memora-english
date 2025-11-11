@@ -27,12 +27,15 @@ class CardManager:
         await storage.save_user(user)
     
     async def get_next_learning_card(self, telegram_id: int) -> Optional[UserCard]:
-        """Get next card in learning phase"""
+        """Get next card for learning - returns cards by card_id order (new or pending), excluding learned"""
         cards = await storage.get_user_cards(telegram_id)
         
-        # Find first card in learning status that hasn't been reviewed
+        # Sort by card_id
+        cards.sort(key=lambda c: c.card_id)
+        
+        # Find first new or pending card (not learned)
         for card in cards:
-            if card.status == 'learning' and card.last_reviewed is None:
+            if card.status in ['new', 'pending']:
                 return card
         
         return None
@@ -48,13 +51,16 @@ class CardManager:
         else:
             # Fallback to dynamic calculation
             cards = await storage.get_user_cards(telegram_id)
-            learning_cards = [c for c in cards if c.status == 'learning']
-            completed = sum(1 for c in learning_cards if c.last_reviewed is not None)
-            return completed, len(learning_cards)
+            # Count cards by status
+            not_learned = [c for c in cards if c.status != 'learned']
+            return 0, len(not_learned)
     
     async def get_cards_for_review(self, telegram_id: int) -> List[UserCard]:
-        """Get cards that are due for review"""
-        return await storage.get_due_cards(telegram_id)
+        """Get cards that are due for review - sorted by card_id"""
+        cards = await storage.get_due_cards(telegram_id)
+        # Sort by card_id for consistent order
+        cards.sort(key=lambda c: c.card_id)
+        return cards
     
     async def process_response(self, telegram_id: int, card_id: int, response_type: str):
         """
@@ -73,21 +79,19 @@ class CardManager:
         
         now = get_current_time()
         
-        # If card is in learning phase and first time reviewed, move to review status
-        if card.status == 'learning' and card.last_reviewed is None:
-            card.status = 'review'
-            card.interval_index = 0
-            # Calculate next review based on response
-            new_index, next_review = calculate_next_review(0, response_type)
-            card.interval_index = new_index
-            card.next_review_time = next_review.isoformat()
-        else:
-            # Card is in review phase
-            new_index, next_review = calculate_next_review(card.interval_index, response_type)
-            card.interval_index = new_index
-            card.next_review_time = next_review.isoformat()
+        # Calculate next review using new ANKI algorithm
+        new_index, next_review, new_status = calculate_next_review(
+            card.interval_index, 
+            response_type, 
+            card.status
+        )
         
+        # Update card
+        card.interval_index = new_index
+        card.next_review_time = next_review.isoformat()
+        card.status = new_status
         card.last_reviewed = now.isoformat()
+        card.last_response_type = response_type
         
         # Save updated card
         await storage.save_user_card(card)
@@ -125,14 +129,6 @@ class CardManager:
                 user.current_streak = 1
             
             user.last_activity_date = today
-            
-            # Note: session index will be updated when showing next card
-            
-            # Check if learning phase is completed
-            if not user.learning_phase_completed:
-                next_learning = await self.get_next_learning_card(telegram_id)
-                if next_learning is None:
-                    user.learning_phase_completed = True
             
             await storage.save_user(user)
     

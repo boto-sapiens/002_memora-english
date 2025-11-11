@@ -57,6 +57,7 @@ cover/
 
 # Django stuff:
 *.log
+logs/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -131,11 +132,16 @@ __pypackages__/
 celerybeat-schedule
 celerybeat.pid
 
+# Project specific
+*.pid
+data/*.json
+
 # SageMath parsed files
 *.sage.py
 
 # Environments
 .env
+deploy.env
 .envrc
 .venv
 env/

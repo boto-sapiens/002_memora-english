@@ -2,11 +2,19 @@ import json
 import os
 from pathlib import Path
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 from storage.models import User, UserCard
 from services.anki_algorithm import get_current_time
 from config import DATA_DIR, DEFAULT_PHRASES
+
+# Grace periods for pending cards (in seconds)
+GRACE_PERIODS = {
+    'forgot': 8 * 3600,      # 8 hours
+    'uncertain': 12 * 3600,  # 12 hours
+    'knew': 24 * 3600,       # 24 hours
+    None: 24 * 3600          # Default
+}
 
 
 class JSONStorage:
@@ -94,7 +102,7 @@ class JSONStorage:
             self._write_json(self.users_file, data)
     
     async def init_learning_cards(self, telegram_id: int):
-        """Initialize all 21 cards for a new user in learning phase"""
+        """Initialize all 22 cards for a new user with 'new' status"""
         now = get_current_time().isoformat()
         cards = []
         
@@ -104,10 +112,12 @@ class JSONStorage:
                 card_id=phrase_data['id'],
                 text=phrase_data['text_en'],
                 interval_index=0,
-                next_review_time=now,
-                status='learning',
+                next_review_time=None,
+                status='new',
                 created_at=now,
                 last_reviewed=None,
+                last_response_type=None,
+                deadline_time=None,
                 text_ru=phrase_data.get('text_ru'),
                 text_en=phrase_data.get('text_en'),
                 transcription=phrase_data.get('transcription'),
@@ -127,15 +137,28 @@ class JSONStorage:
                 self._write_json(self.users_file, data)
     
     async def get_due_cards(self, telegram_id: int) -> List[UserCard]:
-        """Get cards that are due for review"""
+        """Get cards that are due for review (pending status or learning/learned with time passed)"""
         cards = await self.get_user_cards(telegram_id)
         now = get_current_time()
         
         due_cards = []
         for card in cards:
-            if card.status == 'review':
+            # Pending cards are always due
+            if card.status == 'pending':
+                due_cards.append(card)
+            # Learning/learned cards that reached their review time become pending
+            elif card.status in ['learning', 'learned'] and card.next_review_time:
                 next_review = datetime.fromisoformat(card.next_review_time)
                 if next_review <= now:
+                    # Auto-transition to pending with deadline
+                    card.status = 'pending'
+                    
+                    # Set deadline based on last response type
+                    grace_seconds = GRACE_PERIODS.get(card.last_response_type, GRACE_PERIODS[None])
+                    deadline = now + timedelta(seconds=grace_seconds)
+                    card.deadline_time = deadline.isoformat()
+                    
+                    await self.save_user_card(card)
                     due_cards.append(card)
         
         return due_cards

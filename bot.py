@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 from config import BOT_TOKEN
-from handlers import start, review, progress, help, group_stats, training
+from handlers import start, review, progress, help, group_stats, training, group_dictation, arena_control
 
 # Configure logging
 logging.basicConfig(
@@ -21,6 +21,7 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="training", description="📚 Режим тренировки"),
         BotCommand(command="progress", description="📊 Показать прогресс"),
         BotCommand(command="group_stats", description="👥 Статистика группы"),
+        BotCommand(command="arena_status", description="🏟️ Arena статус"),
         BotCommand(command="help", description="❓ Помощь и список команд"),
     ]
     await bot.set_my_commands(commands)
@@ -42,6 +43,8 @@ async def main():
     dp.include_router(training.router)
     dp.include_router(progress.router)
     dp.include_router(group_stats.router)
+    dp.include_router(group_dictation.router)
+    dp.include_router(arena_control.router)
     dp.include_router(help.router)
     
     logger.info("Bot starting...")

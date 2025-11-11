@@ -16,47 +16,33 @@ class SessionManager:
         if not user:
             return None
         
-        # Check if learning phase is completed
-        is_learning_completed = await card_manager.is_learning_phase_completed(telegram_id)
+        # Get all cards that need review (new or pending)
+        next_card = await card_manager.get_next_learning_card(telegram_id)
         
-        if not is_learning_completed:
-            # Learning phase - используем сохраненные значения или инициализируем
-            if user.current_session_total is None:
-                cards = await storage.get_user_cards(telegram_id)
-                user.current_session_total = len(cards)
-                user.current_session_index = 0
-                await storage.save_user(user)
-            
+        # If no cards need review - session completed
+        if not next_card:
             return SessionState(
-                current_index=user.current_session_index,
-                total_in_session=user.current_session_total,
-                phase='learning',
-                is_completed=False
-            )
-        else:
-            # Review phase
-            due_cards = await card_manager.get_cards_for_review(telegram_id)
-            
-            if not due_cards:
-                return SessionState(
-                    current_index=0,
-                    total_in_session=0,
-                    phase='review',
-                    is_completed=True
-                )
-            
-            # Инициализировать сессию review если не установлена
-            if user.current_session_total is None or user.current_session_total == 0:
-                user.current_session_total = len(due_cards)
-                user.current_session_index = 0
-                await storage.save_user(user)
-            
-            return SessionState(
-                current_index=user.current_session_index,
-                total_in_session=user.current_session_total,
+                current_index=0,
+                total_in_session=0,
                 phase='review',
-                is_completed=False
+                is_completed=True
             )
+        
+        # Initialize session if not set
+        if user.current_session_total is None:
+            cards = await storage.get_user_cards(telegram_id)
+            # Count cards that need review (not learned)
+            cards_to_review = [c for c in cards if c.status != 'learned']
+            user.current_session_total = len(cards_to_review)
+            user.current_session_index = 0
+            await storage.save_user(user)
+        
+        return SessionState(
+            current_index=user.current_session_index,
+            total_in_session=user.current_session_total,
+            phase='learning',
+            is_completed=False
+        )
     
     async def increment_session_index(self, telegram_id: int) -> None:
         """Increment current session index"""
@@ -76,17 +62,13 @@ class SessionManager:
             logger.info(f"Reset session for user {telegram_id}")
     
     async def get_next_card(self, telegram_id: int) -> Optional[UserCard]:
-        """Get next card for current session"""
+        """Get next card for current session (new or pending, in order by card_id)"""
         session_state = await self.get_session_state(telegram_id)
         if not session_state or session_state.is_completed:
             return None
         
-        if session_state.phase == 'learning':
-            return await card_manager.get_next_learning_card(telegram_id)
-        else:
-            # Review phase
-            due_cards = await card_manager.get_cards_for_review(telegram_id)
-            return due_cards[0] if due_cards else None
+        # Always use the same logic - get next card by order
+        return await card_manager.get_next_learning_card(telegram_id)
     
     async def initialize_learning_session(self, telegram_id: int) -> None:
         """Initialize learning session for new user"""

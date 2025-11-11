@@ -5,7 +5,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from storage.json_storage import storage
 from services.card_manager import card_manager
 from services.anki_algorithm import get_current_time
-from config import CHECK_INTERVAL, BOT_TOKEN
+from config import CHECK_INTERVAL, BOT_TOKEN, TARGET_CHAT_ID
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -23,14 +23,18 @@ class ReminderScheduler:
             logger.info(f"Checking {len(users)} users for due cards...")
             
             for user in users:
-                # Skip users who haven't completed learning phase
-                if not user.learning_phase_completed:
-                    continue
-                
-                # Get cards due for review
+                # Get cards due for review (new or pending)
                 due_cards = await card_manager.get_cards_for_review(user.telegram_id)
                 
                 if due_cards:
+                    # Check if chat_id is allowed for scheduled messages
+                    # For group chats (negative IDs): only send to TARGET_CHAT_ID (if specified)
+                    # For private chats (positive IDs): work as usual
+                    chat_id = user.telegram_id
+                    if TARGET_CHAT_ID is not None and chat_id < 0 and chat_id != TARGET_CHAT_ID:
+                        logger.info(f"Skipping notification for group chat {chat_id} (not target chat {TARGET_CHAT_ID})")
+                        continue
+                    
                     # Check if we already sent a notification recently (within last hour)
                     if user.last_notification_time:
                         last_notif = datetime.fromisoformat(user.last_notification_time)
@@ -44,7 +48,7 @@ class ReminderScheduler:
                     
                     try:
                         await self.bot.send_message(
-                            chat_id=user.telegram_id,
+                            chat_id=chat_id,
                             text=f"🔔 У вас есть <b>{len(due_cards)}</b> карточек для повторения!\n\n"
                                  f"Время повторить изученные словосочетания.",
                             reply_markup=keyboard,

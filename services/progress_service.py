@@ -15,16 +15,17 @@ class ProgressService:
         
         now = get_current_time()
         
-        # Calculate statistics
+        # Calculate statistics by new statuses
         total_cards = len(cards)
-        learned_cards = sum(1 for c in cards if c.status == 'review')
-        due_cards = sum(1 for c in cards 
-                       if c.status == 'review' 
-                       and datetime.fromisoformat(c.next_review_time) <= now)
+        new_cards = sum(1 for c in cards if c.status == 'new')
+        learning_cards = sum(1 for c in cards if c.status == 'learning')
+        pending_cards = sum(1 for c in cards if c.status == 'pending')
+        learned_cards = sum(1 for c in cards if c.status == 'learned')
         
-        # Next review time
+        # Next review time from learning/learned cards
         future_cards = [c for c in cards 
-                       if c.status == 'review' 
+                       if c.status in ['learning', 'learned'] 
+                       and c.next_review_time
                        and datetime.fromisoformat(c.next_review_time) > now]
         
         next_review = None
@@ -34,8 +35,10 @@ class ProgressService:
         
         return {
             'total_cards': total_cards,
+            'new_cards': new_cards,
+            'learning_cards': learning_cards,
+            'pending_cards': pending_cards,
             'learned_cards': learned_cards,
-            'due_cards': due_cards,
             'next_review_time': next_review,
             'knew_count': user.knew_count,
             'doubt_count': user.doubt_count,
